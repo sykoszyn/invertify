@@ -10,12 +10,15 @@ Asesor de inversiones para Argentina: cargás lo que tenés en tu broker (Cocos,
 - **Proyección a la meta** con aportes mensuales, rango pesimista/optimista y aporte necesario para llegar a tiempo.
 - **Escenarios "¿qué pasa si…?"**: salto del dólar, crisis global, rally tech, baja del riesgo país, baja de tasas en EE.UU.
 - **Objetivo departamento**: precio estimado por zona y m², gastos de escritura y opción de crédito hipotecario (solo anticipo).
-- **Asesor con IA** (opcional): chat que conoce tu cartera y tu plan.
-- **Carga por captura de pantalla** (opcional): subís screenshots del broker y la IA completa la cartera.
+- **Carga por captura de pantalla**: subís screenshots del broker y se completa la cartera. Por defecto usa OCR
+  (Tesseract.js) dentro del navegador: gratis, sin claves, y las imágenes no salen del dispositivo. Probado con
+  capturas reales de IOL y Cocos (`tests/ocr.test.ts`). Con `ANTHROPIC_API_KEY` usa Claude, que es más preciso.
+- **Asesor**: preguntas frecuentes respondidas con los números de la cartera de cada persona (sin IA).
+  Con `ANTHROPIC_API_KEY` se habilita además un chat libre.
 - **Cuentas y seguimiento** (opcional, Supabase): guardar carteras y ver la evolución de valor y puntaje en el tiempo.
 - Guías por broker, glosario, calculadoras (pesos vs. dólares, interés compuesto) y dólar MEP del día.
 
-Sin Supabase ni API key la app funciona completa: la cartera se guarda en el navegador y se ocultan solo las funciones de IA y cuentas.
+Sin Supabase ni API key la app funciona completa: la cartera se guarda en el navegador, las capturas se leen con OCR local y el asesor responde las preguntas frecuentes; solo se ocultan las cuentas y el chat libre.
 
 > Invertify es una herramienta educativa. Las sugerencias salen de reglas de diversificación y supuestos de mercado
 > (`src/lib/catalog.ts`, `src/lib/engine.ts`), no de predicciones, y no constituyen asesoramiento financiero personalizado.
@@ -66,6 +69,9 @@ src/lib/catalog.ts    instrumentos (CEDEARs, bonos, ONs, FCIs…) con retorno/vo
 src/lib/engine.ts     motor: asignación objetivo, diagnóstico, movimientos, proyección, escenarios, puntaje
 src/lib/brokers.ts    brokers y guías paso a paso por operación
 src/lib/goals.ts      objetivos y calculadora de departamento
+src/lib/ocr/          lectura de capturas (OCR en el navegador + parser de pantallas de brokers)
+src/lib/faq.ts        asesor sin IA: respuestas armadas con el análisis
+scripts/              copia a public/ocr los archivos del OCR (corre en postinstall/prebuild)
 src/components/       UI (analizador, gráficos, calculadoras)
 src/app/api/          dólar del día, asesor IA, lectura de capturas
 supabase/migrations/  esquema y políticas RLS

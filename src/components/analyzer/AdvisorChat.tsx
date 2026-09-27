@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Bot, Loader2, Send } from "lucide-react";
 import type { Analysis } from "@/lib/engine";
 import { BUCKET_LABEL } from "@/lib/catalog";
 import { BROKERS } from "@/lib/brokers";
 import type { Portfolio } from "@/lib/types";
+import { buildFaq } from "@/lib/faq";
+import { useAiStatus } from "@/lib/useAiStatus";
 
 interface Msg {
   role: "user" | "assistant";
@@ -41,19 +43,22 @@ function buildContext(a: Analysis, p: Portfolio) {
   };
 }
 
-const SUGGESTIONS = [
-  "¿Por qué me sugerís estos cambios?",
-  "¿Qué hago con mis pesos?",
-  "¿Cómo llego más rápido a mi objetivo?",
-  "¿Qué pasa si hay una crisis el año que viene?",
-];
-
 export function AdvisorChat({ analysis, portfolio }: { analysis: Analysis; portfolio: Portfolio }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const ai = useAiStatus();
+  const faq = useMemo(() => buildFaq(analysis, portfolio), [analysis, portfolio]);
+  const asked = new Set(messages.filter((m) => m.role === "user").map((m) => m.content));
+
+  const askLocal = (id: string) => {
+    const f = faq.find((x) => x.id === id);
+    if (!f) return;
+    setMessages((ms) => [...ms, { role: "user", content: f.q }, { role: "assistant", content: f.a.join("\n") }]);
+    setTimeout(() => endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 50);
+  };
 
   const send = async (text: string) => {
     const q = text.trim();
@@ -96,14 +101,16 @@ export function AdvisorChat({ analysis, portfolio }: { analysis: Analysis; portf
       <h2 className="text-xl font-bold flex items-center gap-2">
         <Bot className="w-5 h-5 text-brand" /> Preguntale al asesor
       </h2>
-      <p className="text-sm text-muted mb-4">Conoce tu cartera y el plan. Preguntale lo que quieras, en tus palabras.</p>
+      <p className="text-sm text-muted mb-4">
+        {ai ? "Conoce tu cartera y el plan. Preguntale lo que quieras, en tus palabras." : "Tocá una pregunta: te respondemos con los números de tu cartera."}
+      </p>
 
       {messages.length > 0 && (
         <div className="space-y-3 mb-4 max-h-[480px] overflow-y-auto pr-1">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${m.role === "user" ? "bg-brand text-white" : "bg-surface-2"}`}>
-                {m.content || <Loader2 className="w-4 h-4 animate-spin" />}
+              <div className={`max-w-[88%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "bg-brand text-white" : "bg-surface-2"}`}>
+                {m.content ? <Bubble text={m.content} /> : <Loader2 className="w-4 h-4 animate-spin" />}
               </div>
             </div>
           ))}
@@ -111,17 +118,18 @@ export function AdvisorChat({ analysis, portfolio }: { analysis: Analysis; portf
         </div>
       )}
 
-      {messages.length === 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {SUGGESTIONS.map((s) => (
-            <button key={s} className="chip text-sm" onClick={() => send(s)}>
-              {s}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {faq
+          .filter((f) => !asked.has(f.q))
+          .map((f) => (
+            <button key={f.id} className="chip text-sm" disabled={busy} onClick={() => (ai ? send(f.q) : askLocal(f.id))}>
+              {f.q}
             </button>
           ))}
-        </div>
-      )}
+      </div>
       {error && <p className="text-sm text-bad mb-3">{error}</p>}
 
+      {ai && (
       <form
         className="flex gap-2"
         onSubmit={(e) => {
@@ -134,6 +142,34 @@ export function AdvisorChat({ analysis, portfolio }: { analysis: Analysis; portf
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
       </form>
+      )}
     </section>
   );
+}
+
+/** Muestra párrafos y convierte las líneas que empiezan con "• " en una lista. */
+function Bubble({ text }: { text: string }) {
+  const blocks: React.ReactNode[] = [];
+  let list: string[] = [];
+  const flush = () => {
+    if (list.length) {
+      blocks.push(
+        <ul key={blocks.length} className="list-disc pl-5 space-y-1">
+          {list.map((li, i) => (
+            <li key={i}>{li}</li>
+          ))}
+        </ul>,
+      );
+      list = [];
+    }
+  };
+  for (const line of text.split("\n")) {
+    if (/^\s*[•\-*]\s+/.test(line)) list.push(line.replace(/^\s*[•\-*]\s+/, ""));
+    else {
+      flush();
+      if (line.trim()) blocks.push(<p key={blocks.length}>{line}</p>);
+    }
+  }
+  flush();
+  return <div className="space-y-2">{blocks}</div>;
 }

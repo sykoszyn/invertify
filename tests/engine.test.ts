@@ -48,3 +48,15 @@ test("cartera vacía no rompe", () => {
   assert.equal(a.totalUsd, 0);
   assert.equal(a.moves.length, 0);
 });
+
+test("preguntas frecuentes con los números de la cartera", async () => {
+  const { buildFaq } = await import("../src/lib/faq");
+  const a = analyze(SAMPLE_HOLDINGS, SAMPLE_PROFILE, DEFAULT_ASSUMPTIONS);
+  const faq = buildFaq(a, { name: "x", holdings: SAMPLE_HOLDINGS, profile: SAMPLE_PROFILE, assumptions: DEFAULT_ASSUMPTIONS });
+  const ids = faq.map((f) => f.id);
+  for (const id of ["empezar", "porque", "pesos", "ganancia", "rapido", "crisis", "riesgo", "revisar"]) assert.ok(ids.includes(id), id);
+  assert.ok(faq.find((f) => f.id === "ganancia")!.q.includes("AMDD"));
+  assert.ok(faq.every((f) => f.a.length > 0 && f.a.every((p) => !p.includes("NaN") && !p.includes("undefined"))));
+  const empty = buildFaq(analyze([], SAMPLE_PROFILE, DEFAULT_ASSUMPTIONS), { name: "x", holdings: [], profile: SAMPLE_PROFILE, assumptions: DEFAULT_ASSUMPTIONS });
+  assert.ok(empty.every((f) => f.a.every((p) => !p.includes("NaN"))));
+});

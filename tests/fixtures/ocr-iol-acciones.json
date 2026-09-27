@@ -1,0 +1,74 @@
+[
+{
+"text": "Todos Acciones Y CEDEARs Fondos comunes",
+"bbox": {
+"x0": 79,
+"y0": 121,
+"x1": 1209,
+"y1": 150
+}
+},
+{
+"text": "Total Acciones",
+"bbox": {
+"x0": 520,
+"y0": 444,
+"x1": 799,
+"y1": 476
+}
+},
+{
+"text": "US$462,84",
+"bbox": {
+"x0": 554,
+"y0": 575,
+"x1": 763,
+"y1": 615
+}
+},
+{
+"text": "Y $-77,57",
+"bbox": {
+"x0": 571,
+"y0": 628,
+"x1": 746,
+"y1": 663
+}
+},
+{
+"text": "Símbolo Variación diaria Rendimiento Valorizado",
+"bbox": {
+"x0": 50,
+"y0": 974,
+"x1": 1168,
+"y1": 1002
+}
+},
+{
+"text": "Grupo Financiero",
+"bbox": {
+"x0": 51,
+"y0": 1117,
+"x1": 337,
+"y1": 1152
+}
+},
+{
+"text": "Galicia S.A Y -1,93% Y -14,35% $462,84 >",
+"bbox": {
+"x0": 51,
+"y0": 1157,
+"x1": 1259,
+"y1": 1198
+}
+},
+{
+"text": "GGALD",
+"bbox": {
+"x0": 50,
+"y0": 1211,
+"x1": 164,
+"y1": 1239
+}
+}
+]

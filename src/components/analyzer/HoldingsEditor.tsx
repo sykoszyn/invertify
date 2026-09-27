@@ -6,6 +6,7 @@ import { ASSET_CLASS_LABEL, CATALOG, findInstrument } from "@/lib/catalog";
 import { BROKER_LIST } from "@/lib/brokers";
 import { toUsd } from "@/lib/engine";
 import { usd, uid } from "@/lib/format";
+import { useAiStatus } from "@/lib/useAiStatus";
 import type { AssetClass, Assumptions, BrokerId, Currency, Holding } from "@/lib/types";
 
 const CLASSES = Object.keys(ASSET_CLASS_LABEL) as AssetClass[];
@@ -32,6 +33,8 @@ export function HoldingsEditor({ holdings, broker, assumptions, onChange, onBrok
   const [draft, setDraft] = useState({ ticker: "", name: "", assetClass: "cedear_etf" as AssetClass, currency: "USD" as Currency, amount: "", returnPct: "", ratePct: "" });
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ fraction: number; label: string } | null>(null);
+  const ai = useAiStatus();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const setTicker = (value: string) => {
@@ -74,24 +77,48 @@ export function HoldingsEditor({ holdings, broker, assumptions, onChange, onBrok
 
   const onFiles = async (files: FileList | null) => {
     if (!files?.length) return;
+    const list = [...files].slice(0, 8);
     setUploading(true);
     setUploadMsg(null);
+    setProgress({ fraction: 0, label: "Preparando…" });
     try {
-      const images = await Promise.all([...files].slice(0, 5).map(fileToDataUrl));
-      const res = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images, broker }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "No pudimos leer la imagen");
-      const found: Holding[] = (json.holdings as Omit<Holding, "id">[]).map((h) => ({ ...h, id: uid(), broker }));
-      onChange([...holdings, ...found]);
-      setUploadMsg(`Encontramos ${found.length} inversiones. Revisalas abajo y corregí lo que haga falta.`);
+      let found: Omit<Holding, "id">[] | null = null;
+      let empty = 0;
+      if (ai) {
+        // Con clave de IA configurada, la lectura es más precisa; si falla, usamos el OCR local.
+        try {
+          setProgress({ fraction: 0.3, label: "Leyendo con IA…" });
+          const images = await Promise.all(list.slice(0, 5).map(fileToDataUrl));
+          const res = await fetch("/api/extract", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ images, broker }) });
+          if (res.ok) found = (await res.json()).holdings;
+        } catch {
+          found = null;
+        }
+      }
+      if (!found) {
+        const { readScreenshots } = await import("@/lib/ocr/browser");
+        const r = await readScreenshots(list, (fraction, label) => setProgress({ fraction, label }));
+        found = r.holdings;
+        empty = r.emptyFiles;
+      }
+      if (found.length === 0) {
+        setUploadMsg("No encontramos inversiones en esas capturas. Usá la pantalla de tu cartera donde se ve cada activo con su valor (por ejemplo \"Mis inversiones\" en IOL o el detalle del fondo en Cocos), o cargalas a mano.");
+        return;
+      }
+      // Si una inversión ya estaba cargada, la reemplazamos en lugar de duplicarla.
+      const tickers = new Set(found.map((h) => h.ticker.toUpperCase()));
+      const kept = holdings.filter((h) => !tickers.has(h.ticker.toUpperCase()));
+      onChange([...kept, ...found.map((h) => ({ ...h, id: uid(), broker }))]);
+      const replaced = holdings.length - kept.length;
+      setUploadMsg(
+        `Encontramos ${found.length} ${found.length === 1 ? "inversión" : "inversiones"}${replaced ? ` (${replaced} ya estaba${replaced === 1 ? "" : "n"} y se actualizó)` : ""}. ` +
+          `Revisá los montos abajo y corregí lo que haga falta.${empty ? ` En ${empty} captura${empty === 1 ? "" : "s"} no encontramos nada.` : ""}`,
+      );
     } catch (e) {
-      setUploadMsg(e instanceof Error ? e.message : "Error leyendo la captura");
+      setUploadMsg(e instanceof Error ? `No pudimos leer las capturas: ${e.message}` : "Error leyendo las capturas");
     } finally {
       setUploading(false);
+      setProgress(null);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
@@ -130,7 +157,24 @@ export function HoldingsEditor({ holdings, broker, assumptions, onChange, onBrok
             </button>
           </div>
         </div>
+        {progress && (
+          <div className="mb-4 rounded-xl bg-brand-soft px-3 py-2 text-sm" role="status">
+            <div className="flex justify-between">
+              <span>{progress.label}</span>
+              <span className="tabular">{Math.round(progress.fraction * 100)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-surface mt-1.5 overflow-hidden">
+              <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.max(4, progress.fraction * 100)}%` }} />
+            </div>
+          </div>
+        )}
         {uploadMsg && <p className="mb-4 text-sm rounded-xl bg-brand-soft px-3 py-2">{uploadMsg}</p>}
+        {!uploadMsg && !progress && holdings.length === 0 && (
+          <p className="mb-4 text-xs text-muted">
+            📸 Tip: sacá capturas de la pantalla donde se ve cada inversión con su valor y subilas todas juntas.{" "}
+            {ai ? "Se leen con IA." : "Se leen en tu celular o computadora: las imágenes no se envían a ningún lado."}
+          </p>
+        )}
 
         <div className="flex flex-wrap gap-2 mb-4">
           {QUICK.map((q) => (
