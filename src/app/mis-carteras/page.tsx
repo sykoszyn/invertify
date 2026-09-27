@@ -40,8 +40,8 @@ export default function Page() {
   if (!user) {
     return (
       <Shell>
-        <p className="text-ink-2 mb-4">Entrá con tu email para guardar tus carteras y ver cómo evolucionan.</p>
-        <Link href="/login" className="btn btn-primary">
+        <p className="text-ink-2 mb-4">Entrá con tu email y contraseña para guardar tus carteras y ver cómo evolucionan.</p>
+        <Link href="/login?modo=entrar" className="btn btn-primary">
           Entrar
         </Link>
       </Shell>
