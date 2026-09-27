@@ -40,18 +40,20 @@ npm run lint                 # typecheck
    (o `supabase db push` con la CLI). En *Authentication → URL Configuration* poné tu dominio de Vercel
    (ej. `https://invertifyapp.vercel.app`) como *Site URL*.
    El registro es con email y contraseña y se entra directo, **sin mail de confirmación**: la cuenta se crea desde
-   `/api/signup` con la service role key, ya confirmada. Si preferís no usar esa key, desactivá
+   `/api/signup` con la clave secreta, ya confirmada. Si preferís no usar esa key, desactivá
    *Authentication → Providers → Email → Confirm email* y la app usa el registro estándar de Supabase.
 2. **Vercel**: importá el repo (framework Next.js, sin cambios de build) y cargá las variables:
 
    | Variable | Para qué |
    |---|---|
-   | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key de Supabase |
-   | `SUPABASE_SERVICE_ROLE_KEY` | solo servidor: crear cuentas sin mail de confirmación |
+   | `SUPABASE_URL` | URL del proyecto Supabase |
+   | `SUPABASE_PUBLISHABLE_KEY` | clave publicable (`sb_publishable_…`) |
+   | `SUPABASE_SECRET_KEY` | clave secreta (`sb_secret_…`), solo servidor: crear cuentas sin mail de confirmación |
    | `ANTHROPIC_API_KEY` | asesor IA y lectura de capturas |
 
-3. Deploy. Todas las variables son opcionales.
+3. Deploy. Todas las variables son opcionales. También se aceptan los nombres viejos
+   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). Si cambiás una variable
+   en Vercel, hacé *Redeploy*: la URL y la clave publicable se incorporan al compilar.
 
 La IA usa `claude-opus-5` con *server-side fallbacks* activados (`fallbacks: "default"`), así que si el modelo declina un pedido la API
 lo reintenta con el modelo alternativo recomendado. Antes de abrir la app al público conviene agregar rate limiting a

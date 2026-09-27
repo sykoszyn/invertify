@@ -4,12 +4,12 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 
 /**
- * Crea la cuenta ya confirmada (sin mail de confirmación) usando la service role key.
+ * Crea la cuenta ya confirmada (sin mail de confirmación) usando la clave secreta de Supabase.
  * Si la key no está configurada responde 501 y el cliente usa el registro normal de Supabase.
  */
 export async function POST(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return NextResponse.json({ error: "not_configured" }, { status: 501 });
 
   const body = (await req.json().catch(() => null)) as { email?: unknown; password?: unknown } | null;
