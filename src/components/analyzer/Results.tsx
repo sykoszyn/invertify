@@ -12,11 +12,11 @@ import {
   Target,
   TrendingUp,
 } from "lucide-react";
-import { AllocationDonut, AllocationLegend, BUCKET_COLOR, ProjectionChart, ScoreGauge, StressChart } from "@/components/charts";
+import { AllocationBars, GoalProgress, HOY, HowToRead, PLAN, ProjectionChart, ScenarioCards, ScoreBar, ScoreGauge, monthYear } from "@/components/charts";
 import { BROKERS } from "@/lib/brokers";
-import { ASSET_CLASS_LABEL, BUCKET_DESC, BUCKET_LABEL } from "@/lib/catalog";
+import { ASSET_CLASS_LABEL } from "@/lib/catalog";
 import type { Analysis, Diagnostic, Move } from "@/lib/engine";
-import { pct, signedPct, usd, years } from "@/lib/format";
+import { pct, usd, years } from "@/lib/format";
 import { GOAL_BY_ID } from "@/lib/goals";
 import type { Portfolio } from "@/lib/types";
 import { AdvisorChat } from "./AdvisorChat";
@@ -54,33 +54,77 @@ export function Results({ analysis: a, portfolio, onSaved }: { analysis: Analysi
               {goal.emoji} {goal.label} · {usd(profile.goalAmountUsd)} en {profile.horizonYears} año{profile.horizonYears === 1 ? "" : "s"} · perfil {profile.risk}
             </p>
             <h2 className="text-2xl font-bold mt-1">{headline(a)}</h2>
+            <p className="text-sm text-ink-2 mt-1">La nota es como en el colegio: de 75 para arriba, tu cartera está bien armada para tu objetivo.</p>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-              <Kpi label="Tu cartera hoy" value={usd(a.totalUsd)} />
-              <Kpi label="Retorno esperado (USD/año)" value={pct(a.expReturn, 1)} sub={`Plan sugerido: ${pct(a.targetExpReturn, 1)}`} />
-              <Kpi label="Volatilidad estimada" value={pct(a.vol, 0)} sub={`Plan sugerido: ${pct(a.targetVol, 0)}`} />
+              <Kpi label="Tu plata invertida hoy" value={usd(a.totalUsd)} />
               <Kpi
-                label="Llegás a la meta en"
-                value={a.yearsToGoalTarget == null ? "+50 años" : a.yearsToGoalTarget === 0 ? "¡Ya llegaste!" : years(a.yearsToGoalTarget)}
-                sub="con el plan sugerido"
+                label="Ganancia estimada por año"
+                value={`+${usd(a.totalUsd * Math.max(0, a.expReturn))}`}
+                valueCls="text-good"
+                sub={`Con el plan: +${usd(a.totalUsd * Math.max(0, a.targetExpReturn))}`}
               />
+              <Kpi
+                label="En un año muy malo podría bajar"
+                value={a.badYear < 0 ? `−${usd(-a.badYear * a.totalUsd)}` : "Casi nada"}
+                valueCls="text-bad"
+                sub={`Con el plan: ${a.targetBadYear < 0 ? `−${usd(-a.targetBadYear * a.totalUsd)}` : "casi nada"}`}
+                hint="Pasa aproximadamente 1 de cada 20 años. Si no vendés, en general se recupera."
+              />
+              <Kpi label="Con el plan llegás a tu meta" value={reachDate(a.yearsToGoalTarget)} sub={a.yearsToGoalTarget ? `en ${years(a.yearsToGoalTarget)}` : undefined} />
             </div>
           </div>
         </div>
-        <div className="grid sm:grid-cols-5 gap-3 mt-6">
+        <div className="grid sm:grid-cols-5 gap-4 mt-6">
           {a.score.parts.map((p) => (
             <div key={p.label} className="text-sm">
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-2">
                 <span className="font-medium">{p.label}</span>
-                <span className="tabular text-muted">
+                <span className="tabular text-muted shrink-0">
                   {Math.round(p.value)}/{p.max}
                 </span>
               </div>
-              <div className="h-1.5 bg-surface-2 rounded-full mt-1.5 overflow-hidden">
-                <div className="h-full rounded-full bg-brand" style={{ width: `${(p.value / p.max) * 100}%` }} />
-              </div>
+              <ScoreBar value={p.value} max={p.max} />
               <p className="text-xs text-muted mt-1">{p.note}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* ------------ Proyección ------------ */}
+      <section>
+        <SectionTitle icon={<TrendingUp className="w-5 h-5" />} title="¿Llegás a tu meta?" subtitle="Cuánta plata tendrías cada año, sumando lo que aportás por mes." />
+        <div className="card p-5 sm:p-6">
+          <GoalProgress current={a.totalUsd} goal={profile.goalAmountUsd} emoji={goal.emoji} />
+          <div className="border-t border-line my-5" />
+          <ProjectionChart data={a.projection} goal={profile.goalAmountUsd} reachPlan={a.yearsToGoalTarget} reachCurrent={a.yearsToGoalCurrent} />
+          <div className="grid sm:grid-cols-3 gap-3 mt-4 text-sm">
+            <Kpi label="Si seguís como hoy, llegás en" value={reachDate(a.yearsToGoalCurrent)} dot={HOY} />
+            <Kpi label="Con el plan, llegás en" value={reachDate(a.yearsToGoalTarget)} dot={PLAN} />
+            <Kpi
+              label={`Para llegar en ${profile.horizonYears} año${profile.horizonYears === 1 ? "" : "s"} tendrías que aportar`}
+              value={`${usd(a.requiredMonthly)} por mes`}
+              sub={`Hoy aportás ${usd(profile.monthlyContributionUsd)} por mes`}
+            />
+          </div>
+          <HowToRead>
+            la línea <span style={{ color: PLAN }} className="font-semibold">naranja</span> es cuánto tendrías con el plan y la{" "}
+            <span style={{ color: HOY }} className="font-semibold">azul</span>, si no cambiás nada. La zona gris es la plata que ponés vos: todo
+            lo que queda por encima es lo que gana tu inversión. Cuando la línea toca la meta verde, llegaste. Pasá el dedo o el mouse por el
+            gráfico para ver cada año.
+          </HowToRead>
+        </div>
+      </section>
+
+      {/* ------------ Hoy vs sugerido ------------ */}
+      <section>
+        <SectionTitle icon={<Target className="w-5 h-5" />} title="¿Dónde está tu plata?" subtitle="Cómo está repartida hoy y cómo te conviene repartirla para tu objetivo." />
+        <div className="card p-5 sm:p-6">
+          <AllocationBars current={a.bucketWeight} target={a.target} total={a.totalUsd} />
+          <HowToRead>
+            cada fila es un tipo de inversión. La barra <span style={{ color: HOY }} className="font-semibold">azul</span> es lo que tenés hoy y la{" "}
+            <span style={{ color: PLAN }} className="font-semibold">naranja</span> lo que te recomendamos. Si la azul es más larga, tenés de más; si
+            es más corta, te falta. La etiqueta te dice cuánta plata mover.
+          </HowToRead>
         </div>
       </section>
 
@@ -109,54 +153,10 @@ export function Results({ analysis: a, portfolio, onSaved }: { analysis: Analysi
         ) : (
           <ol className="space-y-3">
             {a.moves.map((m, i) => (
-              <MoveCard key={m.id} move={m} index={i + 1} brokerName={BROKERS[m.broker].name} />
+              <MoveCard key={m.id} move={m} index={i + 1} brokerName={BROKERS[m.broker].name} total={a.totalUsd} />
             ))}
           </ol>
         )}
-      </section>
-
-      {/* ------------ Hoy vs sugerido ------------ */}
-      <section>
-        <SectionTitle icon={<Target className="w-5 h-5" />} title="Tu cartera hoy vs. la sugerida" subtitle="Cómo repartir la plata según tu objetivo, plazo y perfil." />
-        <div className="card p-5 sm:p-6">
-          <div className="grid md:grid-cols-[1fr_1fr_1.4fr] gap-6 items-center">
-            <AllocationDonut weights={a.bucketWeight} total={a.totalUsd} title="Hoy" />
-            <AllocationDonut weights={a.target} title="Sugerida" />
-            <AllocationLegend current={a.bucketWeight} target={a.target} />
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-6">
-            {(Object.keys(a.target) as (keyof typeof a.target)[])
-              .filter((b) => a.target[b] > 0 || a.bucketWeight[b] > 0)
-              .map((b) => (
-                <div key={b} className="text-sm flex gap-2">
-                  <span className="mt-1.5 w-2.5 h-2.5 rounded-full shrink-0" style={{ background: BUCKET_COLOR[b] }} />
-                  <span>
-                    <strong>{BUCKET_LABEL[b]}:</strong> <span className="text-ink-2">{BUCKET_DESC[b]}</span>
-                  </span>
-                </div>
-              ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ------------ Proyección ------------ */}
-      <section>
-        <SectionTitle icon={<TrendingUp className="w-5 h-5" />} title="¿Llegás a tu meta?" subtitle="Proyección en dólares con tus aportes mensuales." />
-        <div className="card p-5 sm:p-6">
-          <ProjectionChart data={a.projection} goal={profile.goalAmountUsd} />
-          <div className="grid sm:grid-cols-3 gap-3 mt-4 text-sm">
-            <Kpi
-              label="Con tu cartera actual"
-              value={a.yearsToGoalCurrent == null ? "+50 años" : a.yearsToGoalCurrent === 0 ? "Ya llegaste" : years(a.yearsToGoalCurrent)}
-            />
-            <Kpi label="Con el plan sugerido" value={a.yearsToGoalTarget == null ? "+50 años" : a.yearsToGoalTarget === 0 ? "Ya llegaste" : years(a.yearsToGoalTarget)} />
-            <Kpi label={`Aporte para llegar en ${profile.horizonYears} años`} value={`${usd(a.requiredMonthly)}/mes`} sub={`Hoy aportás ${usd(profile.monthlyContributionUsd)}/mes`} />
-          </div>
-          <p className="text-xs text-muted mt-4">
-            La banda sombreada muestra el rango donde caería tu cartera actual 8 de cada 10 veces según su volatilidad. Son supuestos, no
-            promesas: el mercado puede hacerlo mejor o peor.
-          </p>
-        </div>
       </section>
 
       {/* ------------ Escenarios ------------ */}
@@ -164,38 +164,30 @@ export function Results({ analysis: a, portfolio, onSaved }: { analysis: Analysi
         <SectionTitle
           icon={<AlertOctagon className="w-5 h-5" />}
           title="¿Qué pasa si…?"
-          subtitle="Nadie sabe qué va a pasar. Por eso probamos tu cartera en distintos escenarios de suba y baja."
+          subtitle="Nadie sabe qué va a pasar. Por eso probamos cuánto ganarías o perderías en cada situación."
         />
         <div className="card p-5 sm:p-6">
-          <StressChart data={a.stress} />
-          <div className="grid sm:grid-cols-2 gap-2 mt-4 text-sm">
-            {a.stress.map((s) => (
-              <div key={s.id} className="rounded-xl bg-surface-2 p-3">
-                <div className="font-medium">{s.label}</div>
-                <div className="text-ink-2">
-                  Tu cartera actual: <strong className={s.currentPct >= 0 ? "text-good" : "text-bad"}>{signedPct(s.currentPct)}</strong> (
-                  {s.currentUsd >= 0 ? "+" : ""}
-                  {usd(s.currentUsd)}) · plan sugerido: <strong>{signedPct(s.targetPct)}</strong>
-                </div>
-              </div>
-            ))}
-          </div>
+          <ScenarioCards data={a.stress} total={a.totalUsd} />
+          <HowToRead>
+            la línea del medio es &ldquo;ni gano ni pierdo&rdquo;. Las barras hacia la derecha (▲ verde) son ganancia y hacia la izquierda (▼ rojo)
+            son pérdida. Compará tu cartera de hoy con la del plan: una buena cartera no pierde demasiado en ningún escenario.
+          </HowToRead>
         </div>
       </section>
 
       {/* ------------ Posiciones ------------ */}
       {a.positions.length > 0 && (
         <section>
-          <SectionTitle icon={<Info className="w-5 h-5" />} title="Tus posiciones, una por una" />
+          <SectionTitle icon={<Info className="w-5 h-5" />} title="Tus inversiones, una por una" subtitle="Cuánto pesa cada una en tu cartera y qué tan arriesgada es." />
           <div className="card p-2 sm:p-4 overflow-x-auto">
             <table className="w-full text-sm min-w-[620px]">
               <thead>
                 <tr className="text-left text-muted">
                   <th className="font-medium p-2">Activo</th>
                   <th className="font-medium p-2">Tipo</th>
-                  <th className="font-medium p-2 text-right">Valor</th>
-                  <th className="font-medium p-2 text-right">% cartera</th>
-                  <th className="font-medium p-2 text-right">Ret. esperado</th>
+                  <th className="font-medium p-2 text-right">Valor hoy</th>
+                  <th className="font-medium p-2">Cuánto pesa</th>
+                  <th className="font-medium p-2 text-right">Ganancia estimada/año</th>
                   <th className="font-medium p-2 text-right">Riesgo</th>
                 </tr>
               </thead>
@@ -208,11 +200,19 @@ export function Results({ analysis: a, portfolio, onSaved }: { analysis: Analysi
                     </td>
                     <td className="p-2 text-ink-2">{ASSET_CLASS_LABEL[p.instrument.assetClass]}</td>
                     <td className="p-2 text-right tabular">{usd(p.usd)}</td>
-                    <td className="p-2 text-right tabular">{pct(p.weight, 1)}</td>
-                    <td className="p-2 text-right tabular">{pct(p.expReturn, 1)}</td>
+                    <td className="p-2">
+                      <div className="flex items-center gap-2 min-w-[120px]">
+                        <div className="flex-1 h-2.5 rounded-full bg-surface-2 overflow-hidden">
+                          <div className="h-full rounded-full bg-brand" style={{ width: `${Math.max(1, p.weight * 100)}%` }} />
+                        </div>
+                        <span className="tabular w-11 text-right">{pct(p.weight, p.weight < 0.1 ? 1 : 0)}</span>
+                      </div>
+                    </td>
+                    <td className="p-2 text-right tabular">{p.expReturn >= 0 ? "+" : "−"}{usd(Math.abs(p.expReturn * p.usd))} <span className="text-xs text-muted">({pct(p.expReturn, 1)})</span></td>
                     <td className="p-2 text-right" aria-label={`Riesgo ${p.instrument.risk} de 5`}>
                       <span className="tabular">{"●".repeat(p.instrument.risk)}</span>
                       <span className="text-line">{"●".repeat(5 - p.instrument.risk)}</span>
+                      <div className="text-xs text-muted">{["", "Muy bajo", "Bajo", "Medio", "Alto", "Muy alto"][p.instrument.risk]}</div>
                     </td>
                   </tr>
                 ))}
@@ -253,14 +253,25 @@ function SectionTitle({ icon, title, subtitle }: { icon: React.ReactNode; title:
   );
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Kpi({ label, value, sub, valueCls, hint, dot }: { label: string; value: string; sub?: string; valueCls?: string; hint?: string; dot?: string }) {
   return (
-    <div className="rounded-xl bg-surface-2 p-3">
-      <div className="text-xs text-muted">{label}</div>
-      <div className="text-lg font-bold tabular">{value}</div>
+    <div className="rounded-xl bg-surface-2 p-3" title={hint}>
+      <div className="text-xs text-muted flex items-center gap-1.5">
+        {dot && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dot }} />}
+        {label}
+      </div>
+      <div className={`text-lg font-bold tabular ${valueCls ?? ""}`}>{value}</div>
       {sub && <div className="text-xs text-muted">{sub}</div>}
+      {hint && <div className="text-[11px] text-muted mt-1 leading-snug">{hint}</div>}
     </div>
   );
+}
+
+function reachDate(y: number | null): string {
+  if (y == null) return "más de 50 años";
+  if (y === 0) return "¡Ya llegaste!";
+  const now = new Date();
+  return monthYear(now.getFullYear() + now.getMonth() / 12 + y);
 }
 
 function DiagnosticCard({ d }: { d: Diagnostic }) {
@@ -280,7 +291,8 @@ function DiagnosticCard({ d }: { d: Diagnostic }) {
   );
 }
 
-function MoveCard({ move: m, index, brokerName }: { move: Move; index: number; brokerName: string }) {
+function MoveCard({ move: m, index, brokerName, total }: { move: Move; index: number; brokerName: string; total: number }) {
+  const yearly = (m.returnDeltaPp / 100) * total;
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState(false);
   return (
@@ -291,12 +303,17 @@ function MoveCard({ move: m, index, brokerName }: { move: Move; index: number; b
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-brand-soft px-2 py-0.5 font-semibold">{KIND_LABEL[m.kind]}</span>
             <span className="text-muted">
-              Impacto en retorno esperado:{" "}
-              <strong className={m.returnDeltaPp >= 0 ? "text-good" : "text-warn"}>
-                {m.returnDeltaPp >= 0 ? "+" : ""}
-                {m.returnDeltaPp.toFixed(2)} pp/año
-              </strong>
-              {m.returnDeltaPp < 0 && " (a cambio de menos riesgo)"}
+              {Math.abs(yearly) < 5 ? (
+                "Casi no cambia lo que ganás: simplifica tu cartera"
+              ) : yearly > 0 ? (
+                <>
+                  Podrías ganar <strong className="text-good">+{usd(yearly)} más por año</strong> (estimado)
+                </>
+              ) : (
+                <>
+                  Ganarías <strong className="text-warn">{usd(-yearly)} menos por año</strong>, a cambio de menos riesgo
+                </>
+              )}
             </span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-base">

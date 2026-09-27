@@ -186,4 +186,15 @@ export const BUCKET_DESC: Record<Bucket, string> = {
   cripto: "Bitcoin y otras: alto riesgo, porción chica.",
 };
 
+/** Nombres en lenguaje cotidiano, para gente que recién empieza. */
+export const BUCKET_FRIENDLY: Record<Bucket, { emoji: string; name: string; plain: string }> = {
+  liquidez: { emoji: "💵", name: "Plata disponible", plain: "La podés sacar cuando quieras. Rinde poco." },
+  rf_usd: { emoji: "🛡️", name: "Ahorro en dólares que paga interés", plain: "Bonos y fondos en USD: se mueven poco y pagan un interés." },
+  rf_ars: { emoji: "📄", name: "Tasa en pesos", plain: "Plazo fijo, letras: rinden en pesos." },
+  global: { emoji: "🌎", name: "Acciones de todo el mundo", plain: "Cientos de empresas juntas (como el S&P 500). Crecen en el largo plazo." },
+  individuales: { emoji: "🏢", name: "Empresas puntuales", plain: "Apple, Nvidia, Coca-Cola… Más riesgo que un fondo de muchas." },
+  argentina: { emoji: "🇦🇷", name: "Acciones argentinas", plain: "Pueden subir mucho o caer mucho según la economía del país." },
+  cripto: { emoji: "🪙", name: "Cripto", plain: "Bitcoin y similares. Muy volátil: solo una porción chica." },
+};
+
 export const BUCKETS: Bucket[] = ["liquidez", "rf_usd", "rf_ars", "global", "individuales", "argentina", "cripto"];

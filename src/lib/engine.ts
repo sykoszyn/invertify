@@ -107,6 +107,9 @@ export interface Analysis {
   stress: StressResult[];
   equityCap: number;
   equityWeight: number;
+  /** Cuánto podría caer la cartera en un año malo (1 de cada 20), como fracción negativa. */
+  badYear: number;
+  targetBadYear: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -335,8 +338,8 @@ interface ScenarioDef {
 export const SCENARIOS: ScenarioDef[] = [
   {
     id: "devaluacion",
-    label: "Salto del dólar (+40%)",
-    description: "El dólar MEP sube 40% en poco tiempo.",
+    label: "El dólar salta 40%",
+    description: "Una devaluación fuerte: el dólar MEP sube 40% en poco tiempo.",
     shock: (i) => {
       if (isArsInstrument(i)) return 1 / 1.4 - 1;
       if (i.bucket === "argentina") return -0.15;
@@ -347,8 +350,8 @@ export const SCENARIOS: ScenarioDef[] = [
   },
   {
     id: "crisis_global",
-    label: "Crisis global (S&P −25%)",
-    description: "Caída fuerte de Wall Street, como 2008, 2020 o 2022.",
+    label: "Hay una crisis mundial",
+    description: "Wall Street cae 25%, como pasó en 2008, 2020 o 2022.",
     shock: (i) => {
       if (i.tags?.includes("oro")) return 0.05;
       if (i.bucket === "cripto") return -0.45;
@@ -364,8 +367,8 @@ export const SCENARIOS: ScenarioDef[] = [
   },
   {
     id: "rally_tech",
-    label: "Rally tecnológico",
-    description: "La IA y las tecnológicas siguen liderando: Nasdaq +25%.",
+    label: "Las tecnológicas siguen subiendo",
+    description: "La inteligencia artificial sigue de moda y el Nasdaq sube 25%.",
     shock: (i) => {
       if (i.tags?.includes("tech")) return 0.25;
       if (i.bucket === "global") return 0.14;
@@ -376,8 +379,8 @@ export const SCENARIOS: ScenarioDef[] = [
   },
   {
     id: "riesgo_pais",
-    label: "Baja el riesgo país",
-    description: "Argentina normaliza: el riesgo país cae a 400 puntos.",
+    label: "A la Argentina le va bien",
+    description: "Baja el riesgo país: suben los bonos y las acciones argentinas.",
     shock: (i) => {
       if (i.tags?.includes("soberano") && i.bucket === "rf_usd") return 0.12;
       if (i.bucket === "rf_usd" && i.tags?.includes("corporativo")) return 0.03;
@@ -389,8 +392,8 @@ export const SCENARIOS: ScenarioDef[] = [
   },
   {
     id: "tasas_bajan",
-    label: "La Fed baja tasas",
-    description: "Baja la tasa en EE.UU.: suben bonos y acciones.",
+    label: "EE.UU. baja las tasas de interés",
+    description: "Cuando la plata en el banco rinde menos, suelen subir bonos y acciones.",
     shock: (i) => {
       if (i.bucket === "rf_usd") return i.tags?.includes("soberano") ? 0.06 : 0.03;
       if (i.bucket === "cripto") return 0.15;
@@ -613,7 +616,11 @@ export function analyze(holdings: Holding[], profile: Profile, assumptions: Assu
   const goal = profile.goalAmountUsd;
   const monthly = profile.monthlyContributionUsd;
   const H = Math.max(1, profile.horizonYears);
-  const showYears = Math.min(40, Math.max(H, 3));
+  const yearsToGoalCurrent = yearsToReach(totalUsd, monthly, stats.r, goal);
+  const yearsToGoalTarget = yearsToReach(totalUsd, monthly, tStats.r, goal);
+  // El gráfico llega al menos hasta el plazo elegido y, si falta poco más, hasta el año en que se alcanza la meta.
+  const reach = Math.max(yearsToGoalCurrent ?? 0, yearsToGoalTarget ?? 0);
+  const showYears = Math.min(30, Math.max(H, 3, reach <= H + 10 ? Math.ceil(reach) : H));
   const projection: ProjectionPoint[] = [];
   const step = showYears <= 3 ? 1 : showYears <= 10 ? 3 : 6;
   for (let month = 0; month <= showYears * 12; month += step) {
@@ -628,8 +635,6 @@ export function analyze(holdings: Holding[], profile: Profile, assumptions: Assu
       aportado: totalUsd + monthly * month,
     });
   }
-  const yearsToGoalCurrent = yearsToReach(totalUsd, monthly, stats.r, goal);
-  const yearsToGoalTarget = yearsToReach(totalUsd, monthly, tStats.r, goal);
   const requiredMonthly = requiredMonthlyFor(totalUsd, tStats.r, goal, H);
 
   if (goal > 0 && totalUsd > 0) {
@@ -664,11 +669,11 @@ export function analyze(holdings: Holding[], profile: Profile, assumptions: Assu
   const concPenalty = positions.filter((p) => !p.instrument.diversified).reduce((s, p) => s + Math.max(0, p.weight - 0.1) * 2.5, 0);
   const distance = BUCKETS.reduce((s, b) => s + Math.abs(bucketWeight[b] - target[b]), 0) / 2;
   const parts: ScorePart[] = [
-    { label: "Diversificación", value: 25 * clamp(1 - concPenalty), max: 25, note: "Que ninguna empresa pese demasiado." },
-    { label: "Alineación con tu objetivo", value: 30 * clamp(1 - distance / 0.6), max: 30, note: `Hoy habría que mover ${fmt(distance)} de la cartera.` },
-    { label: "Moneda correcta", value: 15 * clamp(1 - Math.max(0, arsWeight - allowedArs) / 0.5), max: 15, note: "Objetivo en dólares, ahorro en dólares." },
-    { label: "Colchón de liquidez", value: profile.hasEmergencyFund ? 15 : 15 * clamp(liquidity / 0.1), max: 15, note: "Fondo de emergencia o liquidez ≥10%." },
-    { label: "Riesgo acorde al plazo", value: 15 * clamp(1 - Math.max(0, equityWeight - equityCap) / 0.4), max: 15, note: `Máximo sugerido en acciones: ${fmt(equityCap)}.` },
+    { label: "No depender de una empresa", value: 25 * clamp(1 - concPenalty), max: 25, note: "Ninguna empresa sola debería pesar más del 10%." },
+    { label: "Repartida según tu meta", value: 30 * clamp(1 - distance / 0.6), max: 30, note: `Hoy habría que mover ${fmt(distance)} de la cartera.` },
+    { label: "Ahorro en dólares", value: 15 * clamp(1 - Math.max(0, arsWeight - allowedArs) / 0.5), max: 15, note: "Tu meta se paga en dólares: ahorrá en dólares." },
+    { label: "Plata para imprevistos", value: profile.hasEmergencyFund ? 15 : 15 * clamp(liquidity / 0.1), max: 15, note: "Un fondo de emergencia o al menos 10% disponible." },
+    { label: "Riesgo acorde al plazo", value: 15 * clamp(1 - Math.max(0, equityWeight - equityCap) / 0.4), max: 15, note: `Para tu plazo, no más de ${fmt(equityCap)} en acciones.` },
   ];
   const scoreTotal = positions.length === 0 ? 0 : Math.round(parts.reduce((s, p) => s + p.value, 0));
 
@@ -698,6 +703,8 @@ export function analyze(holdings: Holding[], profile: Profile, assumptions: Assu
     stress,
     equityCap,
     equityWeight,
+    badYear: Math.min(0, stats.r - 1.65 * stats.vol),
+    targetBadYear: Math.min(0, tStats.r - 1.65 * tStats.vol),
   };
 }
 
